@@ -1,0 +1,14 @@
+version: '3'
+services:
+  e2e-tests:
+    build: .
+    image: blackfynn/end-to-end-tests:${TAG:-latest}
+    environment:
+      E2E_EMAIL: ${E2E_EMAIL}
+      E2E_PASSWORD: ${E2E_PASSWORD}
+      BF_ENVIRONMENT: ${BF_ENVIRONMENT}
+      E2E_BLIND_REVIEWER_EMAIL: ${E2E_BLIND_REVIEWER_EMAIL}
+      E2E_BLIND_REVIEWER_PASSWORD: ${E2E_BLIND_REVIEWER_PASSWORD}
+      E2E_TRIAL_USER_EMAIL: ${E2E_TRIAL_USER_EMAIL}
+      E2E_TRIAL_USER_PASSWORD: ${E2E_TRIAL_USER_PASSWORD}
+    command: test

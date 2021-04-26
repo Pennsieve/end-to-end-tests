@@ -1,0 +1,35 @@
+*.class
+*.log
+
+.DS_Store
+
+.idea/
+*.class
+*.log
+
+# sbt specific
+.cache/
+.history/
+.lib/
+dist/
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+project/metals.sbt
+
+## Scala ##
+.metals
+.bloop
+
+## Vim ##
+*.swp
+*.swo
+
+back-end/.bloop
+back-end/project/.bloop
+back-end/.metals
+
+# docker
+.Trash-0/

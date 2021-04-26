@@ -1,0 +1,67 @@
+#!groovy
+node("executor") {
+  checkout scm
+
+  def commitHash  = sh(returnStdout: true, script: 'git rev-parse HEAD | cut -c-7').trim()
+  def imageTag = "${env.BUILD_NUMBER}-${commitHash}"
+
+  def e2eProdCypressCreds = usernamePassword(
+    credentialsId: "e2e-prod-test-user-1-credentials",
+    usernameVariable: "E2E_EMAIL",
+    passwordVariable: "E2E_PASSWORD"
+  )
+
+  def e2eBlindReviewerCreds = usernamePassword(
+    credentialsId: "e2e-blindreviewer-credentials",
+    usernameVariable: "E2E_BLIND_REVIEWER_EMAIL",
+    passwordVariable: "E2E_BLIND_REVIEWER_PASSWORD"
+  )
+
+  def e2eTrialUserCreds = usernamePassword(
+    credentialsId: "e2e-trialuser-credentials",
+    usernameVariable: "E2E_TRIAL_USER_EMAIL",
+    passwordVariable: "E2E_TRIAL_USER_PASSWORD"
+  )
+
+  def blackfynnNexusCreds = usernamePassword(
+    credentialsId: "blackfynn-nexus-ci-login",
+    usernameVariable: "BLACKFYNN_NEXUS_USER",
+    passwordVariable: "BLACKFYNN_NEXUS_PW"
+  )
+
+  def runTestsForTag = { String tagName ->
+    try {
+        withEnv(['BF_ENVIRONMENT=PRODUCTION']) {
+          withCredentials([e2eProdCypressCreds, e2eBlindReviewerCreds, e2eTrialUserCreds]) {
+            sh "docker run -e E2E_EMAIL -e E2E_PASSWORD -e E2E_BLIND_REVIEWER_EMAIL -e E2E_BLIND_REVIEWER_PASSWORD -e BF_ENVIRONMENT -e E2E_TRIAL_USER_EMAIL -e E2E_TRIAL_USER_PASSWORD blackfynn/end-to-end-tests:${imageTag} -n ${tagName}"
+          }
+        }
+    } catch (e) {
+      slackSend(channel: "#end-to-end-tests", color: '#b20000', message: "FAILED: PRODUCTION ${tagName} Tests: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+
+      sh "curl -s -X POST " +
+              "https://alert.victorops.com/integrations/generic/20131114/alert/a0e9a781-de39-4e2a-98be-111fae93d247/prd-data-management " +
+              "-H 'Content-Type: application/json' " +
+              "-d '{ \"message_type\" : \"CRITICAL\", \"entity_id\":\"Blackfynn Data Management Production\", \"entity_display_name\":\"End-to-End Test Failed\", \"state_message\":\"FAILED PRODUCTION ${tagName} Tests ${env.BUILD_NUMBER}\"}'"
+      throw e
+    }
+    slackSend(channel: "#end-to-end-tests", color: '#006600', message: "SUCCESSFUL: PRODUCTION ${tagName} Tests: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+  }
+
+  stage("Build") {
+    withCredentials([blackfynnNexusCreds]) {
+      sh "sbt -Dversion=$imageTag clean docker "
+    }
+  }
+
+  stage("Test") {
+    parallel(
+      Processing_Prod: {runTestsForTag("Processing")},
+      Streaming_Prod: {runTestsForTag("Streaming")},
+      Packages_Prod: {runTestsForTag("Packages")},
+      Authentication_Prod: {runTestsForTag("Authentication")},
+      Upload_Prod: {runTestsForTag("Upload")},
+      Metadata_Prod: {runTestsForTag("Metadata")},
+    )
+  }
+}
